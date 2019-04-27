@@ -1,0 +1,285 @@
+package com.template.webserver
+
+import com.sun.org.apache.regexp.internal.RE
+import com.template.*
+import net.corda.core.contracts.Amount
+import net.corda.core.contracts.UniqueIdentifier
+import net.corda.core.contracts.filterStatesOfType
+import net.corda.core.identity.groupAbstractPartyByWellKnownParty
+import net.corda.core.messaging.CordaRPCOps
+import net.corda.core.messaging.startFlow
+import net.corda.core.messaging.vaultQueryBy
+import net.corda.core.node.ServiceHub
+import net.corda.core.node.services.Vault
+import net.corda.core.node.services.vault.Builder.equal
+import net.corda.core.node.services.vault.QueryCriteria
+import net.corda.core.utilities.contextLogger
+import net.corda.core.utilities.getOrThrow
+import net.corda.finance.DOLLARS
+import org.hibernate.criterion.Distinct
+import org.slf4j.LoggerFactory
+import org.springframework.beans.factory.annotation.Autowired
+import org.springframework.http.HttpStatus
+import org.springframework.http.ResponseEntity
+import org.springframework.web.bind.annotation.*
+import java.net.URI
+import java.util.*
+import javax.validation.constraints.Null
+import javax.ws.rs.QueryParam
+
+@RestController
+@RequestMapping("/api")
+class Controller {
+    companion object {
+        private val logger = contextLogger()
+    }
+    @CrossOrigin
+    private fun getCampaignLink(campaign: Campaign) = "/api/campaigns/" + campaign.linearId
+    @CrossOrigin
+    private fun getCampaignByRef(ref: String): Campaign? {
+        val vault = rpc.vaultQueryBy<Campaign>().states
+        val states = vault.filterStatesOfType<Campaign>().filter { it.state.data.linearId.toString() == ref }
+        return if (states.isEmpty()) null else {
+            val campaigns = states.map { it.state.data }
+            return if (campaigns.isEmpty()) null else campaigns[0]
+        }
+    }
+
+    @Autowired
+    lateinit var rpc: CordaRPCOps
+    @CrossOrigin
+    private fun getAllCampaign(): Array<Campaign> {
+        val vault = rpc.vaultQueryBy<Campaign>().states
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/campaigns")
+    fun fetchCampaign(): Array<Campaign> = getAllCampaign()
+
+    /**Run by fundraiser*/
+    //Start campaign flow
+    @CrossOrigin
+    @PostMapping("/campaigns")
+    fun storeCampaign(@RequestBody newCampaign: Campaign): ResponseEntity<Any?> {
+        return try {
+            logger.info("linearId: ${newCampaign.linearId.id}")
+            logger.info("externalId: ${newCampaign.linearId.externalId}")
+            logger.info("NewCampagin : $newCampaign")
+            rpc.startFlow(AutoOfferFlow::StartCampaign, newCampaign).returnValue.getOrThrow()
+            logger.info("Create campaign successfully")
+            ResponseEntity.created(URI.create(getCampaignLink(newCampaign))).build()
+        } catch (ex: Exception) {
+            logger.info("Exception when creating deal: $ex", ex)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.toString())
+        }
+    }
+    //Get campaign by campaign linear id
+    @CrossOrigin
+    @GetMapping("/campaigns/{ref:.+}")
+    fun fetchCampagin(@PathVariable ref: String?): ResponseEntity<Any?> {
+        val campaign = getCampaignByRef(ref!!)
+        logger.info("ref $ref")
+        return if (campaign == null) {
+            ResponseEntity.notFound().build()
+        } else {
+            ResponseEntity.ok(campaign)
+        }
+
+    }
+    @GetMapping("/campaigns/networksnapshot")
+    fun fetchDeal() = rpc.networkMapSnapshot().toString()
+    /********************************************************************************************************/
+
+
+
+    /**************************************Donor make donation*****************************************/
+    private fun getDonationLink(donation: Donation) = "/api/donations/" + donation.linearId
+
+    private fun getDonationByRef(ref: String): Donation? {
+
+        val vault = rpc.vaultQueryBy<Donation>().states
+        val states = vault.filterStatesOfType<Donation>().filter { it.state.data.linearId.toString() == ref }
+        return if (states.isEmpty()) null else {
+            val donations = states.map { it.state.data }
+            return if (donations.isEmpty()) null else donations[0]
+        }
+    }
+    private fun getDonationByCampaignRef(ref: String): List<Donation>?{
+        val vault = rpc.vaultQueryBy<Donation>().states
+        val states = vault.filterStatesOfType<Donation>().filter { it.state.data.campaignReference.toString() == ref }
+        logger.info("donation states: $states")
+        return if (states.isEmpty()) null else {
+            val donations = states.map { it.state.data }
+            val donationSize = states.map { it.state.data }.size
+            logger.info("donations: $donations")
+            return if (donations.isEmpty())
+                null else donations
+        }
+    }
+    private fun getAllDonation(): Array<Donation> {
+        val vault = rpc.vaultQueryBy<Donation>().states
+        val states = vault.filterStatesOfType<Donation>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/donations")
+    fun fetchDonation(): Array<Donation> = getAllDonation()
+
+    /**Run by donor*/
+    //Start donation flow
+    @CrossOrigin
+    @PostMapping("/donations")
+    fun storeDonation(@QueryParam(value = "id") id: String,
+                      @QueryParam(value = "amount") amount: String,
+                      @QueryParam(value = "currency") currency: String,
+                      @QueryParam(value = "paymentMethod") paymentMethod: String): ResponseEntity<Any?> {
+        return try {
+            logger.info("id : $id")
+            logger.info("amount : $amount")
+            logger.info("currency: $currency")
+            val campaignReference = UniqueIdentifier.fromString(id)
+            logger.info("campaignReference: $campaignReference")
+            val settleAmount = Amount(amount.toLong() * 100, Currency.getInstance(currency))
+//            logger.info("settleAmount : $settleAmount")
+            rpc.startFlow(MakeDonation::Initiator,settleAmount,campaignReference,paymentMethod).returnValue.getOrThrow()
+            val donationStateAndRef = rpc.vaultQueryBy<Donation>().states.get(0)
+            val donationState = donationStateAndRef.state.data
+            logger.info("donationLinearId : ${donationState.linearId}")
+//            val donationLinearId = vault.state.data.linearId.toString()
+            logger.info("Donated fund successfully")
+            ResponseEntity.created(URI.create(getDonationLink(donationState))).build()
+        } catch (ex: Exception) {
+            logger.info("Exception when creating deal: $ex", ex)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.toString())
+        }
+    }
+
+    //Get donationState by donation linear id
+    @CrossOrigin
+    @GetMapping("/donations/{ref:.+}")
+    fun fetchDonation(@PathVariable ref: String?): ResponseEntity<Any?> {
+        val donation = getDonationByRef(ref!!)
+        logger.info("ref $ref")
+        return if (donation == null) {
+            ResponseEntity.notFound().build()
+        } else {
+            ResponseEntity.ok(donation)
+        }
+
+    }
+
+
+    //Query donationState by campaign id
+    @CrossOrigin
+    @GetMapping("/donations/donationsForCampaign/{ref:.+}")
+    fun fetchDonationByCampaignId(@PathVariable ref: String?): ResponseEntity<Any?> {
+       logger.info("fetchDonationByCampaignId")
+        val donation = getDonationByCampaignRef(ref!!)
+        logger.info("fetchDonationByCampaignId donation: $donation")
+        logger.info("ref $ref")
+        return if (donation == null) {
+            ResponseEntity.notFound().build()
+        } else {
+            ResponseEntity.ok(donation)
+        }
+
+    }
+    /********************************************************************************************************/
+
+
+
+    /***************************************(Receipt)Fundraiser transfer fund to recipient*****************************************/
+
+    private fun getReceiptLink(receipt: Receipt) = "/api/receipts/" + receipt.linearId
+
+    private fun getReceiptByRef(ref: String): Receipt? {
+
+        val vault = rpc.vaultQueryBy<Receipt>().states
+        val states = vault.filterStatesOfType<Receipt>().filter { it.state.data.linearId.toString() == ref }
+        return if (states.isEmpty()) null else {
+            val receipts = states.map { it.state.data }
+            return if (receipts.isEmpty()) null else receipts[0]
+        }
+    }
+    private fun getAllReceipt(): Array<Receipt> {
+        val vault = rpc.vaultQueryBy<Receipt>().states
+        val states = vault.filterStatesOfType<Receipt>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+
+    private fun getReceiptByCampaignRef(ref: String): List<Receipt>?{
+        val vault = rpc.vaultQueryBy<Receipt>().states
+        val states = vault.filterStatesOfType<Receipt>().filter { it.state.data.campaignReference.toString() == ref }
+        logger.info("donation states: $states")
+        return if (states.isEmpty()) null else {
+            val receipts = states.map { it.state.data }
+            logger.info("receipts: $receipts")
+            return if (receipts.isEmpty())
+                null else receipts
+        }
+    }
+    @CrossOrigin
+    @GetMapping("/receipts")
+    fun fetchRecept(): Array<Receipt> = getAllReceipt()
+
+    /**Run by fundraiser*/
+    //Start receipt flow
+    @CrossOrigin
+    @PostMapping("/receipts")
+    fun storeReceipt(@QueryParam(value = "id") id: String,
+                      @QueryParam(value = "amount") amount: String,
+                      @QueryParam(value = "currency") currency: String) : ResponseEntity<Any?> {
+        return try {
+            logger.info("id : $id")
+            logger.info("amount : $amount")
+            logger.info("currency: $currency")
+            val campaignReference = UniqueIdentifier.fromString(id)
+            logger.info("campaignReference: $campaignReference")
+            val settleAmount = Amount(amount.toLong() * 100, Currency.getInstance(currency))
+//            logger.info("settleAmount : $settleAmount")
+            rpc.startFlow(MakeReceipt::Initiator,campaignReference,settleAmount).returnValue.getOrThrow()
+            val receiptStateAndRef = rpc.vaultQueryBy<Receipt>().states.get(0)
+            val receiptState = receiptStateAndRef.state.data
+            logger.info("receiptLinearId : ${receiptState.linearId}")
+//            val donationLinearId = vault.state.data.linearId.toString()
+            logger.info("transfer fund successfully")
+            ResponseEntity.created(URI.create(getReceiptLink(receiptState))).build()
+        } catch (ex: Exception) {
+            logger.info("Exception when creating deal: $ex", ex)
+            ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(ex.toString())
+        }
+    }
+
+
+    //Get receipt by receiptId
+    @CrossOrigin
+    @GetMapping("/receipts/{ref:.+}")
+    fun fetchReceipt(@PathVariable ref: String?): ResponseEntity<Any?> {
+        val donation = getReceiptByRef(ref!!)
+        logger.info("ref $ref")
+        return if (donation == null) {
+            ResponseEntity.notFound().build()
+        } else {
+            ResponseEntity.ok(donation)
+        }
+
+    }
+    //Query receiptState by campaign id
+    @CrossOrigin
+    @GetMapping("/receipts/receiptByCampaignId/{ref:.+}")
+    fun fetchReceiptByCampaignId(@PathVariable ref: String?): ResponseEntity<Any?> {
+        logger.info("fetchReceiptByCampaignId")
+        val donation = getReceiptByCampaignRef(ref!!)
+        logger.info("fetchDonationByCampaignId donation: $donation")
+        logger.info("ref $ref")
+        return if (donation == null) {
+            ResponseEntity.notFound().build()
+        } else {
+            ResponseEntity.ok(donation)
+        }
+
+    }
+    /********************************************************************************************************/
+
+}
