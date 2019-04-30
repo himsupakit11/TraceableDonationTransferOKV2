@@ -11,6 +11,7 @@ import net.corda.core.messaging.startFlow
 import net.corda.core.messaging.vaultQueryBy
 import net.corda.core.node.ServiceHub
 import net.corda.core.node.services.Vault
+import net.corda.core.node.services.VaultService
 import net.corda.core.node.services.vault.Builder.equal
 import net.corda.core.node.services.vault.QueryCriteria
 import net.corda.core.utilities.contextLogger
@@ -23,9 +24,12 @@ import org.springframework.http.HttpStatus
 import org.springframework.http.ResponseEntity
 import org.springframework.web.bind.annotation.*
 import java.net.URI
+import java.time.Instant
 import java.util.*
 import javax.validation.constraints.Null
 import javax.ws.rs.QueryParam
+import net.corda.finance.*
+import net.corda.finance.contracts.asset.Cash
 
 @RestController
 @RequestMapping("/api")
@@ -48,14 +52,31 @@ class Controller {
     @Autowired
     lateinit var rpc: CordaRPCOps
     @CrossOrigin
-    private fun getAllCampaign(): Array<Campaign> {
-        val vault = rpc.vaultQueryBy<Campaign>().states
+    private fun getAvailableCampaign(): Array<Campaign> {
+        logger.info("getAvailableCampaign")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states.filter { it.state.data.status == "Available" }
         val states = vault.filterStatesOfType<Campaign>()
         return states.map { it.state.data }.toTypedArray()
     }
+
+    private fun getOutOfDateCampaign(): Array<Campaign> {
+        logger.info("getAvailableCampaign")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states.filter { it.state.data.status == "Out Of Date" }
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+
     @CrossOrigin
-    @GetMapping("/campaigns")
-    fun fetchCampaign(): Array<Campaign> = getAllCampaign()
+    // Get available campaign
+    @GetMapping("/campaigns/availableCampaign")
+    fun fetchAvailableCampaign(): Array<Campaign> = getAvailableCampaign()
+
+    @CrossOrigin
+    // Get out of date campaign
+    @GetMapping("/campaigns/outOfDateCampaign")
+    fun fetchOutOfDateCampaign(): Array<Campaign> = getOutOfDateCampaign()
 
     /**Run by fundraiser*/
     //Start campaign flow
@@ -87,6 +108,54 @@ class Controller {
         }
 
     }
+    ///////////////////*  Query finished campaign and successful campaign *//////////////////////////////////////
+    @CrossOrigin
+    private fun getFinishedAndSuccessfulCampaign(): Array<Campaign>  {
+        logger.info("getFinishedAndSuccessfulCampaign")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states.filter {it.state.data.status == "Out Of Date"
+                && it.state.data.raised >= it.state.data.target}
+        logger.info("getFinishedAndSuccessfulCampaign State: $vault")
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/campaigns/FinishedAndSuccessfulCampaign")
+    fun endAndsuccessCampagin(): Array<Campaign>  = getFinishedAndSuccessfulCampaign()
+    /////////////////////////////////////////////////////////
+
+
+    ///////////////////*  Query finished campaign and failed campaign  *//////////////////////////////////////
+    @CrossOrigin
+    private fun getFinishedAndFailedCampaign(): List<Campaign> {
+        logger.info("getFinishedAndFailedCampaign")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states.filter { it.state.data.status == "Out Of Date"
+                && it.state.data.raised < it.state.data.target}
+       logger.info("getFinishedAndFailedCampaign State: $vault")
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.distinct()
+    }
+    @CrossOrigin
+    @GetMapping("/campaigns/FinishedAndFailedCampaign")
+    fun finishedAndFailedCampaign(): List<Campaign> = getFinishedAndFailedCampaign()
+    /////////////////////////////////////////////////////////
+
+    ///////////////////*  Query UNCONSUMED campaign state *//////////////////////////////////////
+    @CrossOrigin
+    private fun getUNCONSUMEDState(): List<Campaign> {
+        logger.info("getUNCONSUMEDState")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.distinct()
+    }
+    @CrossOrigin
+    @GetMapping("/campaigns/UNCONSUMEDCampaign")
+    fun campaginUNCONSUMEDState(): List<Campaign> = getUNCONSUMEDState()
+    /////////////////////////////////////////////////////////
+
+
     @GetMapping("/campaigns/networksnapshot")
     fun fetchDeal() = rpc.networkMapSnapshot().toString()
     /********************************************************************************************************/
@@ -97,8 +166,8 @@ class Controller {
     private fun getDonationLink(donation: Donation) = "/api/donations/" + donation.linearId
 
     private fun getDonationByRef(ref: String): Donation? {
-
-        val vault = rpc.vaultQueryBy<Donation>().states
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Donation>(generalCriteria).states
         val states = vault.filterStatesOfType<Donation>().filter { it.state.data.linearId.toString() == ref }
         return if (states.isEmpty()) null else {
             val donations = states.map { it.state.data }
@@ -106,7 +175,8 @@ class Controller {
         }
     }
     private fun getDonationByCampaignRef(ref: String): List<Donation>?{
-        val vault = rpc.vaultQueryBy<Donation>().states
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Donation>(generalCriteria).states
         val states = vault.filterStatesOfType<Donation>().filter { it.state.data.campaignReference.toString() == ref }
         logger.info("donation states: $states")
         return if (states.isEmpty()) null else {
@@ -118,14 +188,25 @@ class Controller {
         }
     }
     private fun getAllDonation(): Array<Donation> {
-        val vault = rpc.vaultQueryBy<Donation>().states
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Donation>(generalCriteria).states
         val states = vault.filterStatesOfType<Donation>()
         return states.map { it.state.data }.toTypedArray()
     }
+
     @CrossOrigin
     @GetMapping("/donations")
     fun fetchDonation(): Array<Donation> = getAllDonation()
 
+    private fun getConsumedAndUnconsumedDonation(): Array<Donation> {
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.ALL)
+        val vault = rpc.vaultQueryBy<Donation>(generalCriteria).states
+        val states = vault.filterStatesOfType<Donation>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/donations/allDonations")
+    fun fetchAllDonation(): Array<Donation> = getConsumedAndUnconsumedDonation()
     /**Run by donor*/
     //Start donation flow
     @CrossOrigin
@@ -185,6 +266,7 @@ class Controller {
         }
 
     }
+
     /********************************************************************************************************/
 
 
@@ -282,4 +364,18 @@ class Controller {
     }
     /********************************************************************************************************/
 
+    /***************************************Cash State*****************************************/
+    ///////////////////*  Query cash state *//////////////////////////////////////
+    @CrossOrigin
+    private fun getCashState(): Array<Cash.State> {
+        logger.info("getUNCONSUMEDState")
+//         val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Cash.State>().states
+        val states = vault.filterStatesOfType<Cash.State>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/cash/cashState")
+    fun cashState(): Array<Cash.State> = getCashState()
+    /////////////////////////////////////////////////////////
 }

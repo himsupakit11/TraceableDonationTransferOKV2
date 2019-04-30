@@ -74,7 +74,8 @@ class MakeDonationTest{
                 recipientName = "Hospital",
             category = "Charity",
                 description = "abcdef",
-                objective = "ghjkl")
+                objective = "ghjkl",
+                status = "Available")
 
 
         // Start a new campaign

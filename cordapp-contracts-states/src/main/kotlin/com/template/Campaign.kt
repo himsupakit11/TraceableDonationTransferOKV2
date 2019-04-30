@@ -19,6 +19,7 @@ import javax.persistence.Column
 import javax.persistence.Entity
 import javax.persistence.Lob
 import javax.persistence.Table
+import javax.validation.constraints.Null
 
 
 // ************
@@ -99,7 +100,7 @@ class CampaignContract : Contract {
 
     private fun verifyEnd(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
         "Only one campaign can end at a time" using (tx.inputsOfType<Campaign>().size == 1)
-        "There must be no campaign output when campaign is ended " using (tx.outputsOfType<Campaign>().isEmpty())
+        "There must be only one campaign output when campaign is ended " using (tx.outputsOfType<Campaign>().size == 1)
         "There must be no donation output when campaign is end" using (tx.outputsOfType<Donation>().isEmpty())
         val campaignInput = tx.inputsOfType<Campaign>().single()
         val donationInputs = tx.inputsOfType<Donation>()
@@ -144,9 +145,10 @@ data class Campaign(
         val category: String,
         val description: String,
         val objective: String,
+        val status: String,
         override val participants: List<AbstractParty> = listOf(fundraiser,recipient,donor),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
-) : LinearState, QueryableState{
+) : LinearState, QueryableState,SchedulableState{
     override fun supportedSchemas() = listOf(CampaignSchemaV1)
     override fun generateMappedObject(schema: MappedSchema) = CampaignSchemaV1.CampaignEntity(this)
     object CampaignSchemaV1 : MappedSchema(Campaign::class.java, 1, listOf(CampaignEntity::class.java)) {
@@ -176,8 +178,11 @@ data class Campaign(
             var category: String = campaign.category
     }
     }
-//    override fun nextScheduledActivity(thisStateRef: StateRef, flowLogicRefFactory: FlowLogicRefFactory): ScheduledActivity? {
-//        return ScheduledActivity(flowLogicRefFactory.create(EndCampaign.Initiator::class.java, thisStateRef), deadline)
-//    }
+    override fun nextScheduledActivity(thisStateRef: StateRef, flowLogicRefFactory: FlowLogicRefFactory): ScheduledActivity? {
+        val logger = loggerFor<Campaign>()
+        logger.info("nextScheduledActivity")
+        return ScheduledActivity(flowLogicRefFactory.create(EndCampaign.Initiator::class.java, thisStateRef), deadline)
+
+    }
 
 }

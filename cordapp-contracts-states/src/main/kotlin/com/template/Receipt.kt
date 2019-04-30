@@ -9,6 +9,7 @@ import net.corda.core.schemas.QueryableState
 import net.corda.core.transactions.LedgerTransaction
 import java.security.PublicKey
 import java.util.*
+import java.util.logging.Logger
 import javax.persistence.Column
 import javax.persistence.Entity
 import javax.persistence.Lob
@@ -23,6 +24,7 @@ class ReceiptContract : Contract {
 
     interface Commands : CommandData {
         class Create : TypeOnlyCommandData(), Commands
+        class End : TypeOnlyCommandData(), Commands
     }
 
     // A transaction is valid if the verify() function of the contract of all the transaction's input and output states
@@ -33,11 +35,15 @@ class ReceiptContract : Contract {
 
         when (receiptCommand.value) {
             is ReceiptContract.Commands.Create -> verifyCreate(tx, setOfSigners)
+            is ReceiptContract.Commands.End -> verifyEnd(tx, setOfSigners)
             else -> throw IllegalArgumentException("")
         }
 
     }
 
+    private fun verifyEnd(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
+        println("Verify Receipt End")
+    }
     private fun verifyCreate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
         //Group donation by campaign id
         "There must be a donation input state when making a receipt. " using (tx.inRefsOfType<Campaign>().size == 1)

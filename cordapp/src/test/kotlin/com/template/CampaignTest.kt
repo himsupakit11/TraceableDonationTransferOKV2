@@ -55,7 +55,8 @@ class CampaignTest{
                 recipientName = "Hospital",
                 category = "Charity",
                 description = "abcdef",
-                objective = "ghjkl"
+                objective = "ghjkl",
+                status = "Available"
         )
     private val kaokonlakao2Campaign
         get() = Campaign(
@@ -70,7 +71,8 @@ class CampaignTest{
                 recipientName = "Hospital",
                 category = "Charity",
                 description = "abcdef",
-                objective = "ghjkl"
+                objective = "ghjkl",
+                status = "Available"
         )
 
     @Test

@@ -43,7 +43,7 @@ class EndCampaignTest{
 
         listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(AutoOfferFlow.RecordTransactionAsObserver::class.java) }
         listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(MakeDonation.Responder::class.java)}
-        listOf(Fundraiser,Donor, Recipient).forEach { it.registerInitiatedFlow(EndCampaign.Responder::class.java) }
+        listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(EndCampaign.Responder::class.java) }
 
     }
     @After
@@ -64,7 +64,7 @@ class EndCampaignTest{
     }
     private fun calculatedDeadlineInSeconds(interval: Long) = Instant.now().plusSeconds(interval)
     private val fiveSecondsFromNow: Instant get() = calculatedDeadlineInSeconds(5L)
-    private val OneSecondsFromNow: Instant get() = calculatedDeadlineInSeconds(5L)
+    private val OneSecondsFromNow: Instant get() = calculatedDeadlineInSeconds(10L)
     //    private val kaokonlakaoCampaign
 //        get() = Campaign(
 //                name = "Kaokonlakao Campaign",
@@ -89,7 +89,8 @@ class EndCampaignTest{
                 recipientName = "Hospital",
                 category = "Charity",
                 description = "abcdef",
-                objective = "ghjkl")
+                objective = "ghjkl",
+                status = "Available")
 
 
 //        selfCashIssue(Fundraiser,0.DOLLARS)
