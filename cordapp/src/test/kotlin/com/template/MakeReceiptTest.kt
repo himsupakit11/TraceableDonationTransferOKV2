@@ -35,7 +35,7 @@ class MakeReceiptTest{
         Recipient = network.createPartyNode(CordaX500Name("Hospital","PCKK", "TH"))
         Fundraiser = network.createPartyNode(CordaX500Name("PToon","BKK","TH"))
 
-        listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(AutoOfferFlow.RecordTransactionAsObserver::class.java) }
+//        listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(AutoOfferFlow.RecordTransactionAsObserver::class.java) }
         listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(MakeDonation.Responder::class.java)}
         listOf(Fundraiser,Donor, Recipient).forEach { it.registerInitiatedFlow(EndCampaign.Responder::class.java) }
 
@@ -75,6 +75,7 @@ class MakeReceiptTest{
                 category = "Charity",
                 description = "abcdef",
                 objective = "ghjkl",
+                bank = Bank.services.myInfo.legalIdentities.first(),
                 status = "Available")
 
 

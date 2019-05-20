@@ -7,8 +7,12 @@ import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.transactions.LedgerTransaction
+import net.corda.core.utilities.loggerFor
+import net.corda.finance.DOLLARS
+import net.corda.finance.POUNDS
 import java.security.PublicKey
 import java.util.*
+import net.corda.finance.USD
 import java.util.logging.Logger
 import javax.persistence.Column
 import javax.persistence.Entity
@@ -20,15 +24,15 @@ class ReceiptContract : Contract {
     companion object {
         // Used to identify our contract when building a transaction.
         const val ID = "com.template.ReceiptContract"
+        val logger = loggerFor<Receipt>()
     }
 
     interface Commands : CommandData {
         class Create : TypeOnlyCommandData(), Commands
         class End : TypeOnlyCommandData(), Commands
+        class Update : TypeOnlyCommandData(), Commands
     }
 
-    // A transaction is valid if the verify() function of the contract of all the transaction's input and output states
-    // does not throw an exception.
     override fun verify(tx: LedgerTransaction) {
         val receiptCommand = tx.commands.requireSingleCommand<ReceiptContract.Commands>()
         val setOfSigners = receiptCommand.signers.toSet()
@@ -36,29 +40,45 @@ class ReceiptContract : Contract {
         when (receiptCommand.value) {
             is ReceiptContract.Commands.Create -> verifyCreate(tx, setOfSigners)
             is ReceiptContract.Commands.End -> verifyEnd(tx, setOfSigners)
+            is ReceiptContract.Commands.Update-> verifyUpdate(tx, setOfSigners)
             else -> throw IllegalArgumentException("")
         }
 
     }
-
+    private fun verifyUpdate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
+        "There must be campaign state and receipt state when updating a receipt " using (tx.inputStates.size == 2)
+        "There must be only the campaign output state when updating a receipt " using (tx.outputStates.size == 1)
+    }
     private fun verifyEnd(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
-        println("Verify Receipt End")
+        logger.info("Verify Receipt End")
+        "Making a receipt must consume the campaign state and the receipt state " using (tx.inputStates.size == 2)
+        "There must be only the campaign output state when making a receipt " using (tx.outputStates.size == 1)
     }
     private fun verifyCreate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
         //Group donation by campaign id
-        "There must be a donation input state when making a receipt. " using (tx.inRefsOfType<Campaign>().size == 1)
+        "There must be a campaign input state when making a receipt. " using (tx.inRefsOfType<Campaign>().size == 1)
         val receiptState = tx.groupStates(Receipt::class.java, { it.linearId })
         "Only one receipt can be made at a time" using (receiptState.size == 1)
         val campaignStates= tx.groupStates(Campaign::class.java, { it.linearId })
         "There must be a campaign state when making a receipt" using (campaignStates.isNotEmpty())
 
+
         val receiptStatesGroup: LedgerTransaction.InOutGroup<Receipt, UniqueIdentifier> = receiptState.single()
-//        "No input states should be consumed when making a receipt" using (receiptStatesGroup.outputs.size == 1)
         val receipt: Receipt = receiptStatesGroup.outputs.single()
         val campaignStatesGroup = campaignStates.single()
+
         val campaign = campaignStatesGroup.outputs.single()
-//          "Transfer amount cannot be more than remaining amount  " using (receipt.amount > campaign.remainingAmount)
-        // "The campaign must be signed by fundraiser and recipient" using (signers == keysFromParticipants(receipt))
+        val campaignInput = campaignStatesGroup.inputs.get(0)
+        val remainingAmount = campaignInput.remainingAmount
+        logger.info("remainingAmount: $remainingAmount")
+        logger.info("receipt amount: ${receipt.amount}")
+        "Transfer amount should not be zero" using (receipt.amount > 0.DOLLARS)
+        logger.info("Campaign transfer amount: ${campaign.transferAmount}")
+        logger.info("Campaign remaining amount: ${campaign.remainingAmount}")
+        logger.info("Campaign raised amount: ${campaign.raised}")
+        "Transfer amount cannot be more than remaining amount  " using (receipt.amount <= remainingAmount)
+        logger.info("Recipient signers: $signers")
+        "The campaign must be signed by fundraiser and recipient" using (signers == keysFromParticipants(receipt)-campaign.bank.owningKey-campaign.donor.owningKey)
     }
 }
 
@@ -69,7 +89,9 @@ data class Receipt(
         val recipient: Party,
         val fundraiser: Party,
         val donor: AbstractParty,
-        override val participants: List<AbstractParty> = listOf(recipient,fundraiser,donor),
+        val bank: Party,
+        val recipientName: String,
+        override val participants: List<AbstractParty> = listOf(recipient,fundraiser,donor,bank),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
 ): LinearState,QueryableState{
     override fun supportedSchemas() = listOf(ReceiptSchemaV1)

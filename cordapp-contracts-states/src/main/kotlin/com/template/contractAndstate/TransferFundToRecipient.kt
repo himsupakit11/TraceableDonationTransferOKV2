@@ -26,6 +26,8 @@ object TransferFundToRecipient {
         @Suspendable
         fun requestDonoatedCash(sessions: List<FlowSession>): CashStatesPayload{
             logger.info("requestDonoatedCash.Session: $sessions")
+            val cashAfter = serviceHub.vaultService.queryBy<Cash.State>().states
+            logger.info("requestDonoatedCash CashQuery: $cashAfter")
             val cashStates = sessions.map { session ->
                 //Sent Success message to all donors
                 session.send(CampaignResult.Success(stateRef))
@@ -34,7 +36,7 @@ object TransferFundToRecipient {
                 //Receive the cash inputs, outputs and keys
                 session.receive<CashStatesPayload>().unwrap { it }
             }
-            logger.info("requestDonoatedCash cashStates: $cashStates")
+            logger.info("requestDonoatedCash")
             return CashStatesPayload(
                     cashStates.flatMap { it.inputs },
                     cashStates.flatMap { it.outputs },
@@ -145,7 +147,6 @@ object TransferFundToRecipient {
             val results = serviceHub.vaultService.queryBy<Receipt>().states.filter { it.state.data.campaignReference == campaign.linearId }.map { it.state.data }
 
             logger.info("TransferFund Responder ouridentity: $ourIdentity")
-//            val results = donationsForCampaign(serviceHub, campaign)
             logger.info("Responder results: $results")
             val token = results.first().amount.token
             val amount = results.map { it.amount }.sumOrZero(token)
@@ -193,4 +194,5 @@ object TransferFundToRecipient {
     }
 
 }
+
 

@@ -8,6 +8,7 @@ import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.transactions.LedgerTransaction
+import net.corda.core.utilities.loggerFor
 import java.security.PublicKey
 import java.security.Timestamp
 import java.time.Instant
@@ -20,35 +21,27 @@ import javax.persistence.Table
 class DonationContract: Contract {
     companion object {
         @JvmStatic
+        // Used to identify our contract when building a transaction.
         val ID = "com.template.DonationContract"
+        val logger = loggerFor<Donation>()
     }
 
     interface Commands : CommandData
     class Create : TypeOnlyCommandData(), Commands
     class Cancel : TypeOnlyCommandData(), Commands
-    class AcceptReceipt: TypeOnlyCommandData(), Commands
     override fun verify(tx: LedgerTransaction) {
         val donationCommand: CommandWithParties<Commands> = tx.commands.requireSingleCommand()
-        val setOfSigners: Set<PublicKey> = donationCommand.signers.toSet()
+        val setOfSigners = donationCommand.signers.toSet()
 
         when (donationCommand.value) {
             is Create -> verifyCreate(tx, setOfSigners)
             is Cancel -> verifyCancel(tx, setOfSigners)
-            is AcceptReceipt ->verifyReceipt(tx,setOfSigners)
             else -> throw IllegalArgumentException("Command not found")
         }
     }
-    private fun verifyReceipt(tx: LedgerTransaction,signers: Set<PublicKey>) = requireThat {
-        println("verifyReceipt")
-        "Making a receipt must be only one input state" using (tx.inputStates.size == 1)
-//        "Receipt must be signed by fundraiser" using (signers == keysFromParticipants())
-//        "Only one input state must be produced when making a receipt" using (tx.outputStates.size == 1)
-//        val campaignOutput = tx.outputsOfType<Campaign>().single()
-//        val receiptOutput = tx.outputsOfType<Receipt>().single()
-//        "The raised amount must be equal" using (campaignOutput.raised == receiptOutput.amount)
-    }
+
     private fun verifyCreate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
-        //Group donation by campaign id
+
         val donationState: List<LedgerTransaction.InOutGroup<Donation, UniqueIdentifier>> = tx.groupStates(Donation::class.java, { it.linearId })
         "Only one donation can be made at a time" using (donationState.size == 1)
         val campaignStates: List<LedgerTransaction.InOutGroup<Campaign, UniqueIdentifier>> = tx.groupStates(Campaign::class.java, { it.linearId })
@@ -59,8 +52,7 @@ class DonationContract: Contract {
         val donation: Donation = donationStatesGroup.outputs.single()
 
         "Donation amount cannot be zero amount" using (donation.amount > Amount(0, donation.amount.token))
-
-        "The campaign must be signed by donor nad manager" using (signers == keysFromParticipants(donation))
+        "The campaign must be signed by donor, bank and fundraiser" using (signers == keysFromParticipants(donation)-donation.fundraiser.owningKey-donation.bank.owningKey)
 
     }
 
@@ -82,10 +74,11 @@ data class Donation(
     val campaignReference: UniqueIdentifier,
     val fundraiser: Party,
     val donor: AbstractParty,
+    val bank: Party,
     val amount: Amount<Currency>,
     val timestamp: Instant,
     val paymentMethod: String,
-    override val participants: List<AbstractParty> = listOf(donor,fundraiser),
+    override val participants: List<AbstractParty> = listOf(donor,fundraiser,bank),
     override val linearId: UniqueIdentifier = UniqueIdentifier()
 ): LinearState,QueryableState{
     override fun supportedSchemas() = listOf(DonationSchema)

@@ -37,10 +37,12 @@ const val CASH_PROGRAM_ID: ContractClassName = "net.corda.finance.contracts.asse
 object EndCampaign{
     @SchedulableFlow
     @InitiatingFlow
+    /**The campaign ending will automatically execute when the campaign deadline has passed*/
     class Initiator(private val stateRef: StateRef): FlowLogic<SignedTransaction>() {
+//        var x: Int = 1
         /**Request cash payload from donors*/
         @Suspendable
-        fun requestDonoatedCash(sessions: List<FlowSession>): CashStatesPayload{
+        fun requestDonatedCash(sessions: List<FlowSession>): CashStatesPayload{
             val cashStates = sessions.map { session ->
                 //Sent Success message to all donors
                 session.send(CampaignResult.Success(stateRef))
@@ -62,15 +64,8 @@ object EndCampaign{
             val utx = TransactionBuilder(notary = notary)
 
             //Create inputs
-//            val campaignReference = Donation.DonationSchema.DonationEntity::campaign_reference.equal(campaign.linearId.id.toString())
-//            val customCriteria = QueryCriteria.VaultCustomQueryCriteria(campaignReference)
-
-            val donationStateAndRefs = serviceHub.vaultService.queryBy<Donation>().states.filter { it.state.data.campaignReference == campaign.linearId } //
-//            logger.info("campaignReference: $campaignReference")
-//            logger.info("customCriteria: $customCriteria")
-
+            val donationStateAndRefs = serviceHub.vaultService.queryBy<Donation>().states.filter { it.state.data.campaignReference == campaign.linearId }
             logger.info("donationStateAndRefs: $donationStateAndRefs")
-//            val donationStateAndRefs = donationsForCampaign(serviceHub,campaign)
             val campaignInputStateAndRef = serviceHub.toStateAndRef<Campaign>(stateRef)
             val campaignState = campaignInputStateAndRef.state.data
             //Create commands
@@ -95,7 +90,7 @@ object EndCampaign{
             logger.info("handleSuccess1")
             val utx = cancelDonation(campaign)
             //Collect the cash states from donors
-            val cashStates = requestDonoatedCash(sessions)
+            val cashStates = requestDonatedCash(sessions)
             //Add the cash inputs, outputs and commands
             cashStates.inputs.forEach { utx.addInputState(it) }
             cashStates.outputs.forEach { utx.addOutputState(it, CASH_PROGRAM_ID) }
@@ -106,6 +101,7 @@ object EndCampaign{
 
         @Suspendable
         override fun call(): SignedTransaction {
+
             //Get campaign data
             val campaign = serviceHub.loadState(stateRef).data as Campaign
             logger.info("End campaign campaign : $campaign")
@@ -119,12 +115,7 @@ object EndCampaign{
             if (campaign.fundraiser != ourIdentity){
                 throw FlowException("Only the fundraiser can run this flow.")
             }
-//            logger.info("Before Initiate Flow")
-            //Retrieve the donations for each campaign
-//            val donationsForCampaign = donationsForCampaign(serviceHub,campaign)
-//            val queryCriteria = QueryCriteria.LinearStateQueryCriteria(linearId = listOf(campaign.linearId))
-//            logger.info("linear id: ${campaign.linearId}")
-//            logger.info("EndCampagin linear id: $queryCriteria")
+            logger.info("Before Initiate Flow")
 
             //Create flow sessions for all donors
             val sessions = donationsForCampaign
@@ -142,13 +133,14 @@ object EndCampaign{
                 campaign.raised < campaign.target -> {
                     sessions.forEach { session -> session.send(CampaignResult.Failure()) }
                     logger.info("Failed")
+//                    x = 0
                     cancelDonation(campaign)
 
                 }
                 else -> handleSuccess(campaign,sessions)
 
         }
-            // Sign, finalise and distribute the transaction.
+            // Sign, finalise and broadcast the transaction to responder.
             logger.info("Before ptx")
             val ptx = serviceHub.signInitialTransaction(utx)
             logger.info("Endcampaign stx: $ptx")
@@ -160,7 +152,10 @@ object EndCampaign{
             val ftx = subFlow(FinalityFlow(stx))
             logger.info("Endcampaign Success")
             logger.info("CampaignStateRef: $stateRef")
+//            logger.info("temp: $x")
+//            if(x != 0)
 //            subFlow(TransferFundToRecipient.Initiator(stateRef))
+//            else logger.info("Not initiate transfer fund to recipient flow ")
 //            logger.info("TransferFundToRecipient Successfully")
             return ftx
     }
@@ -178,9 +173,7 @@ object EndCampaign{
             logger.info("campaignaa: $campaign ")
             logger.info("otehrSession: $otherSession")
             val results = serviceHub.vaultService.queryBy<Donation>().states.filter { it.state.data.campaignReference == campaign.linearId }.map { it.state.data }
-
             logger.info("Responder ouridentity: $ourIdentity")
-//            val results = donationsForCampaign(serviceHub, campaign)
             logger.info("Responder results: $results")
             val token = results.first().amount.token
             val amount = results.map { it.amount }.sumOrZero(token)
@@ -205,11 +198,12 @@ object EndCampaign{
             logger.info("cashInputState: $cashInputState")
             logger.info("cashOutputStates: $outputStates")
             logger.info("cashSigningKeys: $signingKeys")
-            // We need to send the cash state dependency transactions so the manager can verify the tx proposal.
+
             subFlow(SendStateAndRefFlow(otherSession, inputStateAndRefs))
             logger.info("Before pledgedCashStates")
-            // Send the payload back to the campaign manager.
+            // Send the payload back to the fundraiser.
             val pledgedCashStates = CashStatesPayload(inputStateAndRefs, outputStates, signingKeys)
+
             logger.info("After pledgedCashStates")
             otherSession.send(pledgedCashStates)
         }
@@ -224,30 +218,11 @@ object EndCampaign{
             }
 
             val flow = object : SignTransactionFlow(otherSession) {
-                override fun checkTransaction(stx: SignedTransaction) = Unit // TODO
+                override fun checkTransaction(stx: SignedTransaction) = Unit
             }
 
             subFlow(flow)
         }
     }
-
-
-/**Pick all of donations for the specified campaigns*/
-fun donationsForCampaign(services: ServiceHub,campaign: Campaign): List<StateAndRef<Donation>> {
-    val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
-    val logger = loggerFor<Donation>()
-    logger.info("generalCriteria: $generalCriteria")
-    return builder {
-        val campaignReference = Donation.DonationSchema.DonationEntity::campaign_reference.equal(campaign.linearId.id.toString())
-        logger.info("campaignReference: $campaignReference")
-        val customCriteria = QueryCriteria.VaultCustomQueryCriteria(campaignReference)
-        logger.info("customCriteria: $customCriteria")
-        val criteria = generalCriteria `and` customCriteria
-        logger.info("criteria: $criteria")
-        services.vaultService.queryBy<Donation>(criteria)
-
-    }.states
-    }
-
 }
 

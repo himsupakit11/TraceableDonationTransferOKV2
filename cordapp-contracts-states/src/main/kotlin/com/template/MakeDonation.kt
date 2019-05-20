@@ -36,7 +36,6 @@ object MakeDonation{
              private val amount: Amount<Currency>,
              private val campaignReference: UniqueIdentifier,
              private val paymentMethod: String
-           //  private val broadcastToObservers: Boolean
      ) : FlowLogic<SignedTransaction>() {
 
          companion object {
@@ -63,15 +62,6 @@ object MakeDonation{
          override fun call(): SignedTransaction {
              //Pick notary
              val notary = serviceHub.networkMapCache.notaryIdentities.first()
-
-            // Issue Cash
-//             val issueRef = OpaqueBytes.of(0)
-//             logger.info("Donation amount: $amount")
-//             logger.info("issueRef $issueRef")
-//             val issueRequest = CashIssueFlow.IssueRequest(amount,issueRef,notary)
-//             val flow = CashIssueFlow(issueRequest)
-//             logger.info("issueRequest: $issueRequest")
-//             logger.info("CashGenflow: $flow")
             subFlow(selfCashIssue(amount))
              val queryCash = serviceHub.getCashBalance(USD).toString()
              logger.info("Make donation CashBalance: $queryCash")
@@ -84,7 +74,7 @@ object MakeDonation{
 
              val queryCriteria = QueryCriteria.LinearStateQueryCriteria(linearId = listOf(campaignReference))
              logger.info("queryCriteria: $queryCriteria")
-             val campaignInputStateAndRef = serviceHub.vaultService.queryBy<Campaign>(queryCriteria).states.single()
+             val campaignInputStateAndRef = serviceHub.vaultService.queryBy<Campaign>(queryCriteria).states.get(0)
              logger.info("campaignInputStateAndRef ${campaignInputStateAndRef.state}")
 
              val campaignState = campaignInputStateAndRef.state.data
@@ -99,16 +89,19 @@ object MakeDonation{
              ).party.anonymise()
 
              // Assemble the transaction component
-             val acceptDonationCommand = Command(CampaignContract.Commands.AcceptDonation(),campaignState.fundraiser.owningKey)
-             val createDonationCommand = Command(DonationContract.Create(), listOf(myKey.owningKey,campaignState.fundraiser.owningKey))
+             val acceptDonationCommand = Command(CampaignContract.Commands.AcceptDonation(), listOf(campaignState.fundraiser.owningKey))
+             val createDonationCommand = Command(DonationContract.Create(), listOf(myKey.owningKey))
 
              //Output states
              val timeStamp = Instant.now()
-             val donationOutputState = Donation(campaignReference,campaignState.fundraiser,myKey,amount,timeStamp,paymentMethod)
+             logger.info("timeStamp: $timeStamp")
+             val donationOutputState = Donation(campaignReference,campaignState.fundraiser,myKey,campaignState.bank,amount,timeStamp,paymentMethod)
              val donationOutputStateAndContract = StateAndContract(donationOutputState,DonationContract.ID)
-
              val newRaised = campaignState.raised + amount
-             val campaignOutputState = campaignState.copy(raised = newRaised)
+             val newRemainingAmount = newRaised - campaignState.transferAmount
+             logger.info("newRemainingAmount: $newRemainingAmount")
+             val campaignOutputState = campaignState.copy(raised = newRaised, remainingAmount = newRemainingAmount)
+
              val campaignOutputStateAndContract = StateAndContract(campaignOutputState,CampaignContract.ID)
 
             //Build transaction
@@ -122,7 +115,6 @@ object MakeDonation{
              )
 
              utx.setTimeWindow(Instant.now(),30.seconds)  // TODO
-
              //Sign, sync, finalise, and commit transaction
              val ptx = serviceHub.signInitialTransaction(builder = utx,signingPubKeys = listOf(myKey.owningKey))
              val session = initiateFlow(campaignState.fundraiser)
@@ -134,8 +126,6 @@ object MakeDonation{
              val ftx = subFlow(FinalityFlow(stx))
              logger.info("stx: $stx")
              logger.info("ftx: $ftx")
-             //Donor broadcast transaction to fundraiser
-            // session.sendAndReceive<Unit>(broadcastToObservers)
 
              return ftx
 
@@ -143,7 +133,7 @@ object MakeDonation{
      }
     /**
      * The responder run by fundraiser, to check the proposed transaction
-     * to be committed and broadcasts to all parties on the network
+     * and sign the transaction
      * */
     @InitiatedBy(Initiator::class)
     class Responder(val othersession: FlowSession) : FlowLogic<Unit>() {
@@ -157,23 +147,13 @@ object MakeDonation{
                 }
             }
             val stx: SignedTransaction = subFlow(flow)
-            logger.info("Responder2")
-            // transaction will commit and broadcast the committed transaction to fundraiser, if donor want to broadcast
-//            val broadcastToObservers: Boolean = othersession.receive<Boolean>().unwrap { it }
-//            logger.info("broadcastToObservers : $broadcastToObservers")
-//            if(broadcastToObservers){
-                logger.info("Responder3")
-                //wait for transaction has been committed
-                val ftx = waitForLedgerCommit(stx.id)
-                logger.info("Responder4")
-                //subFlow(AutoOfferFlow.BroadcastTransaction(ftx))
-                logger.info("Responder5")
-//            }
-            logger.info("Responder6")
+            logger.info("Responder3")
+            //wait for transaction has been committed
+            val ftx = waitForLedgerCommit(stx.id)
+            logger.info("Responder4")
             othersession.send(Unit)
-
             logger.info("othersession2: $othersession")
-            logger.info("Responder7")
+            logger.info("Responder5")
 
         }
     }

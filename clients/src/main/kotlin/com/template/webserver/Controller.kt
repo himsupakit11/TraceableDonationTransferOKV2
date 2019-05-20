@@ -70,7 +70,7 @@ class Controller {
 
     @CrossOrigin
     // Get available campaign
-    @GetMapping("/campaigns/availableCampaign")
+    @GetMapping("/campaigns")
     fun fetchAvailableCampaign(): Array<Campaign> = getAvailableCampaign()
 
     @CrossOrigin
@@ -86,7 +86,7 @@ class Controller {
         return try {
             logger.info("linearId: ${newCampaign.linearId.id}")
             logger.info("externalId: ${newCampaign.linearId.externalId}")
-            logger.info("NewCampagin : $newCampaign")
+            logger.info("NewCampaign : $newCampaign")
             rpc.startFlow(AutoOfferFlow::StartCampaign, newCampaign).returnValue.getOrThrow()
             logger.info("Create campaign successfully")
             ResponseEntity.created(URI.create(getCampaignLink(newCampaign))).build()
@@ -228,7 +228,7 @@ class Controller {
             val donationState = donationStateAndRef.state.data
             logger.info("donationLinearId : ${donationState.linearId}")
 //            val donationLinearId = vault.state.data.linearId.toString()
-            logger.info("Donated fund successfully")
+            logger.info("Donate fund successfully")
             ResponseEntity.created(URI.create(getDonationLink(donationState))).build()
         } catch (ex: Exception) {
             logger.info("Exception when creating deal: $ex", ex)
@@ -325,7 +325,7 @@ class Controller {
             val receiptState = receiptStateAndRef.state.data
             logger.info("receiptLinearId : ${receiptState.linearId}")
 //            val donationLinearId = vault.state.data.linearId.toString()
-            logger.info("transfer fund successfully")
+            logger.info("transfer money to recipient successfully")
             ResponseEntity.created(URI.create(getReceiptLink(receiptState))).build()
         } catch (ex: Exception) {
             logger.info("Exception when creating deal: $ex", ex)
@@ -378,4 +378,41 @@ class Controller {
     @GetMapping("/cash/cashState")
     fun cashState(): Array<Cash.State> = getCashState()
     /////////////////////////////////////////////////////////
+    /********************************************************************************************************/
+
+    /***************************************Bank get all state *****************************************/
+    private fun bankGetAllCampaigns(): Array<Campaign> {
+        logger.info("bankGetAllCampaigns")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+
+    private fun bankGetAllDonations(): Array<Donation> {
+        logger.info("bankGetAllDonations")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Donation>(generalCriteria).states
+        val states = vault.filterStatesOfType<Donation>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    private fun bankGetAllreceipts(): Array<Receipt> {
+        logger.info("bankGetAllreceipts")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
+        val vault = rpc.vaultQueryBy<Receipt>(generalCriteria).states
+        val states = vault.filterStatesOfType<Receipt>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    @GetMapping("/bank/Allcampaigns")
+    fun fetchAllCampaigns(): Array<Campaign> = bankGetAllCampaigns()
+
+    @CrossOrigin
+    @GetMapping("/bank/Alldonations")
+    fun fetchAllDonations(): Array<Donation> = bankGetAllDonations()
+
+    @CrossOrigin
+    @GetMapping("/bank/Allreceipts")
+    fun fetchAllReceipts(): Array<Receipt> = bankGetAllreceipts()
+
 }

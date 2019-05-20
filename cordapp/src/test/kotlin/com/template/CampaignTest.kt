@@ -51,6 +51,7 @@ class CampaignTest{
                 fundraiser = Fundraiser.services.myInfo.legalIdentities.first(),
                 recipient = Recipient.services.myInfo.legalIdentities.first(),
                 donor = Donor.services.myInfo.legalIdentities.first(),
+                bank = Bank.services.myInfo.legalIdentities.first(),
                 deadline = fiveSecondsFromNow,
                 recipientName = "Hospital",
                 category = "Charity",
@@ -67,6 +68,7 @@ class CampaignTest{
                 fundraiser = Fundraiser.services.myInfo.legalIdentities.first(),
                 recipient = Recipient.services.myInfo.legalIdentities.first(),
                 donor = Donor.services.myInfo.legalIdentities.first(),
+                bank = Bank.services.myInfo.legalIdentities.first(),
                 deadline = fiveSecondsFromNow,
                 recipientName = "Hospital",
                 category = "Charity",
@@ -110,13 +112,12 @@ class CampaignTest{
         // To check that all parties have the same campaignState
 
         assertEquals(1, setOf(fundraiserCampaign, bankCampaign, donorCampaign, recipientCampaign).size)
-        println("===========================================")
-      println("lollllllll")
+        logger.info("===========================================")
         logger.info("Fundraiser: $campaignState")
         logger.info("Bank: $bankCampaign")
         logger.info("Donor: $donorCampaign")
         logger.info("Recipient: $recipientCampaign")
-        println("===========================================")
+        logger.info("===========================================")
 
 
     }

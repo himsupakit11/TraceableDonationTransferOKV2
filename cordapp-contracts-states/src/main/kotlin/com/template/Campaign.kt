@@ -9,6 +9,7 @@ import net.corda.core.schemas.MappedSchema
 import net.corda.core.schemas.PersistentState
 import net.corda.core.schemas.QueryableState
 import net.corda.core.transactions.LedgerTransaction
+import net.corda.core.utilities.contextLogger
 import net.corda.core.utilities.loggerFor
 import net.corda.finance.DOLLARS
 import net.corda.finance.contracts.asset.Cash
@@ -29,16 +30,18 @@ class CampaignContract : Contract {
     companion object {
         // Used to identify our contract when building a transaction.
         const val ID = "com.template.CampaignContract"
+        val logger = loggerFor<Campaign>()
+
     }
-    
-    // A transaction is valid if the verify() function of the contract of all the transaction's input and output states
-    // does not throw an exception.
+
+    // Verifying all the transaction by the contract
+    //Throw an exception when the state doesn't pass the requirement.
     override fun verify(tx: LedgerTransaction) {
         val campaignCommand = tx.commands.requireSingleCommand<Commands>()
         val setOfSigners = campaignCommand.signers.toSet()
 
         when(campaignCommand.value){
-            is Commands.Start -> verifyStrart(tx,setOfSigners)
+            is Commands.Start -> verifyStart(tx,setOfSigners)
             is Commands.AcceptDonation -> verifyDonation(tx,setOfSigners)
             is Commands.End ->verifyEnd(tx,setOfSigners)
             is Commands.AcceptReceipt ->verifyReceipt(tx,setOfSigners)
@@ -47,31 +50,46 @@ class CampaignContract : Contract {
     }
 
     private fun verifyReceipt(tx: LedgerTransaction,signers: Set<PublicKey>) = requireThat {
-            println("verifyReceipt")
-//        "Making a receipt must be only one input state" using (tx.inputStates.size == 1)
-//        "Only one input state must be produced when making a receipt" using (tx.outputStates.size == 1)
-//        val campaignOutput = tx.outputsOfType<Campaign>().single()
-//        val receiptOutput = tx.outputsOfType<Receipt>().single()
-//        "The raised amount must be equal" using (campaignOutput.raised == receiptOutput.amount)
+        logger.info("verifyReceipt")
+        "Making a receipt must have only one input state" using (tx.inputStates.size == 1)
+        "There must be the campaign state and the receipt state when making a receipt" using (tx.outputStates.size == 2)
+        val campaignOutput = tx.outputsOfType<Campaign>().single()
+        val receiptOutput = tx.outputsOfType<Receipt>().single()
+        logger.info("campaignOutput: ${campaignOutput.transferAmount}")
+        logger.info("receiptOutput: ${receiptOutput.amount}")
+        val receiptState = tx.groupStates(Receipt::class.java, { it.linearId })
+        val receiptStatesGroup: LedgerTransaction.InOutGroup<Receipt, UniqueIdentifier> = receiptState.single()
+        val receipt: Receipt = receiptStatesGroup.outputs.distinct().get(0)
+        val receiptTransferAmount = receipt.amount
+        logger.info("receiptTransferAmount: $receiptTransferAmount")
+        val campaignStates= tx.groupStates(Campaign::class.java, { it.linearId })
+        val campaignStatesGroup = campaignStates.single()
+        val campaign = campaignStatesGroup.outputs.single()
+        val campaignTransferAmount = campaign.transferAmount
+        logger.info("campaignTransferAmount: $campaignTransferAmount")
     }
-    private fun verifyStrart(tx: LedgerTransaction,signers: Set<PublicKey>) = requireThat {
+    private fun verifyStart(tx: LedgerTransaction,signers: Set<PublicKey>) = requireThat {
         "No input states should be consumed when creating a campaign." using(tx.inputStates.isEmpty())
         "Only one campaign state should be produced when creating a campaign." using (tx.outputStates.size == 1)
         val campaign = tx.outputStates.single() as Campaign
         "The target field of a recently created campaign should be a positive value." using (campaign.target > Amount(0,campaign.target.token))
         "There raised field must be 0 when starting a campaign." using(campaign.raised == Amount(0,campaign.target.token))
-        println("campaign.deadline: ${campaign.deadline} ")
-        println("Instant.now:${Instant.now()}")
-       // "The campaign deadline must be in the future." using (campaign.deadline > Instant.now())
+        logger.info("campaign.deadline: ${campaign.deadline} ")
+        logger.info("Instant.now:${Instant.now()}")
+        "The campaign deadline must be in the future." using (campaign.deadline > Instant.now())
 
         "There must be a campaign name." using (campaign.name != "")
-        "The campaign must only be signed by fundraiser" using (signers == setOf(campaign.fundraiser.owningKey) )
+        "The campaign must only be signed by fundraiser" using (signers-campaign.bank.owningKey == setOf(campaign.fundraiser.owningKey) )
         "There must be a campaign category" using (campaign.category != "")
-
+        "There must be a recipient name" using (campaign.recipientName != "")
+        "There must be a campaign category" using (campaign.category != "")
+        "There must be a description fo campaign" using (campaign.description != "")
+        "There must be a objective of campaign" using (campaign.objective != "")
+        "There must be a campaign status" using (campaign.status != "")
     }
 
     private fun verifyDonation(tx: LedgerTransaction,signers: Set<PublicKey>) = requireThat {
-        "An accept donation transaction must be only one input state" using (tx.inputStates.size == 1)
+        "Accepting donation transaction must be only one input state" using (tx.inputStates.size == 1)
         "Two outputs state must be produced when accepting a donation" using (tx.outputStates.size == 2)
         val campaignInput: Campaign = tx.inputsOfType<Campaign>().single()
         val campaignOutput: Campaign = tx.outputsOfType<Campaign>().single()
@@ -88,12 +106,10 @@ class CampaignContract : Contract {
         "The campaign deadline cannot be changed when accepting a donation" using (campaignInput.deadline == campaignOutput.deadline)
         "The campaign category cannot be changed when accepting a donation" using (campaignInput.category == campaignOutput.category)
 
-        //Assert that donation cannot make after the deadline
+        //The donation cannot make after the deadline
         tx.timeWindow?.midpoint?.let {
             "The donation cannot be accepted after the campaign deadline" using (it < campaignOutput.deadline)
         }?: throw java.lang.IllegalArgumentException("A time stamp is required when making a donation")
-
-        // Assert signer
         "The campaign must only be signed by fundraiser" using (signers.single() == campaignOutput.fundraiser.owningKey)
 
     }
@@ -107,11 +123,7 @@ class CampaignContract : Contract {
         val cashInputs = tx.inputsOfType<Cash.State>()
         val totalInputStates = 1 + donationInputs.size + cashInputs.size
         "Unrequired state has been added to this transaction" using (tx.inputs.size == totalInputStates)
-        "The campaign deadline must have passed before ending the campaign" using (campaignInput.deadline <= Instant.now()) // TODO
-
-        //val zero = Amount.zero(campaignInput.target.token)
-        //val sumOfAllDonations = donationInputs.map { (amount) -> amount }.fold(zero) { acc, curr -> acc + curr }
-
+        "The campaign deadline must have passed before ending the campaign" using (campaignInput.deadline <= Instant.now())
         "The ending campaign must be signed by fundraiser" using (campaignInput.fundraiser.owningKey == signers.single())
     }
 
@@ -125,7 +137,9 @@ class CampaignContract : Contract {
 }
 // Return public key of participants
 fun keysFromParticipants(obligation: ContractState): Set<PublicKey>{
-    return obligation.participants.map { it.owningKey }.toSet()
+    val setOfKeys = obligation.participants.map { it.owningKey }.toSet()
+    println("setOfKeys: $setOfKeys")
+    return setOfKeys
 }
 
 // *********
@@ -139,6 +153,7 @@ data class Campaign(
         val transferAmount: Amount<Currency>,
         val fundraiser: Party,
         val recipient: Party,
+        val bank: Party,
         val donor: Party,
         val deadline: Instant,
         val recipientName: String,
@@ -146,9 +161,9 @@ data class Campaign(
         val description: String,
         val objective: String,
         val status: String,
-        override val participants: List<AbstractParty> = listOf(fundraiser,recipient,donor),
+        override val participants: List<AbstractParty> = listOf(fundraiser,recipient,donor,bank),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
-) : LinearState, QueryableState,SchedulableState{
+) : LinearState, QueryableState, SchedulableState {
     override fun supportedSchemas() = listOf(CampaignSchemaV1)
     override fun generateMappedObject(schema: MappedSchema) = CampaignSchemaV1.CampaignEntity(this)
     object CampaignSchemaV1 : MappedSchema(Campaign::class.java, 1, listOf(CampaignEntity::class.java)) {

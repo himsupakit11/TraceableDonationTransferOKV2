@@ -13,6 +13,4 @@ import java.security.PublicKey
 class CashStatesPayload(
         val inputs: List<StateAndRef<Cash.State>>,
         val outputs: List<Cash.State>,
-        val signingKeys: List<PublicKey>
-
-) 
+        val signingKeys: List<PublicKey>)

@@ -35,7 +35,7 @@ class MakeDonationTest{
         Recipient = network.createPartyNode(CordaX500Name("Hospital","PCKK", "TH"))
         Fundraiser = network.createPartyNode(CordaX500Name("PToon","BKK","TH"))
 
-        listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(AutoOfferFlow.RecordTransactionAsObserver::class.java) }
+//        listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(AutoOfferFlow.RecordTransactionAsObserver::class.java) }
         listOf(Fundraiser, Bank, Donor, Recipient).forEach { it.registerInitiatedFlow(MakeDonation.Responder::class.java)}
         listOf(Fundraiser,Donor, Recipient).forEach { it.registerInitiatedFlow(EndCampaign.Responder::class.java) }
 
@@ -70,6 +70,7 @@ class MakeDonationTest{
             fundraiser = Fundraiser.services.myInfo.legalIdentities.first(),
             recipient = Recipient.services.myInfo.legalIdentities.first(),
                 donor = Donor.services.myInfo.legalIdentities.first(),
+                bank = Bank.services.myInfo.legalIdentities.first(),
             deadline = OneSecondsFromNow,
                 recipientName = "Hospital",
             category = "Charity",
@@ -109,31 +110,31 @@ class MakeDonationTest{
         println("acceptDonationTransaction: $acceptDonationTransaction")
    // val acceptDonationTransaction2: SignedTransaction = Bank.startFlow(makeDonationFlow).getOrThrow()
  //   println("acceptDonationTransaction: $acceptDonationTransaction")
-
-      //  println("campaignId: $campaignId")
-       // println("FundraiserTxId: ${campaignState.fundraiser.owningKey}")
-        //println("===========================================")
-        logger.info("New campaign started")
-        logger.info(createCampaignTransaction.toString()) //Print tx id
-        logger.info(createCampaignTransaction.tx.toString())
-
-        logger.info("Donor make a donation to fundraiser $100 ")
-        logger.info(acceptDonationTransaction.toString())
-        logger.info(acceptDonationTransaction.tx.toString())
-
-    val donationInputStateAndRef =  Donor.services.vaultService.queryBy<Donation>().states
-        logger.info("DonationState: $donationInputStateAndRef")
-    val donationState = donationInputStateAndRef
-
-//    logger.info("Bank make a donation to fundraiser $100 ")
-//    logger.info(acceptDonationTransaction2.toString())
-//    logger.info(acceptDonationTransaction2.tx.toString())
-
-        // Get the campaign state from the transaction
-        val campaignStateAfterDonaion = acceptDonationTransaction.tx.outRefsOfType<Campaign>().single().ref
-        val campaignAfterDonaiton = acceptDonationTransaction.tx.outputsOfType<Campaign>().single()
-        val newDonationStateRef = acceptDonationTransaction.tx.outRefsOfType<Donation>().single().ref
-        val newDonation= acceptDonationTransaction.tx.outputsOfType<Donation>().single()
+//
+//      //  println("campaignId: $campaignId")
+//       // println("FundraiserTxId: ${campaignState.fundraiser.owningKey}")
+//        //println("===========================================")
+//        logger.info("New campaign started")
+//        logger.info(createCampaignTransaction.toString()) //Print tx id
+//        logger.info(createCampaignTransaction.tx.toString())
+//
+//        logger.info("Donor make a donation to fundraiser $100 ")
+//        logger.info(acceptDonationTransaction.toString())
+//        logger.info(acceptDonationTransaction.tx.toString())
+//
+//    val donationInputStateAndRef =  Donor.services.vaultService.queryBy<Donation>().states
+//        logger.info("DonationState: $donationInputStateAndRef")
+//    val donationState = donationInputStateAndRef
+//
+////    logger.info("Bank make a donation to fundraiser $100 ")
+////    logger.info(acceptDonationTransaction2.toString())
+////    logger.info(acceptDonationTransaction2.tx.toString())
+//
+//        // Get the campaign state from the transaction
+//        val campaignStateAfterDonaion = acceptDonationTransaction.tx.outRefsOfType<Campaign>().single().ref
+//        val campaignAfterDonaiton = acceptDonationTransaction.tx.outputsOfType<Campaign>().single()
+//        val newDonationStateRef = acceptDonationTransaction.tx.outRefsOfType<Donation>().single().ref
+//        val newDonation= acceptDonationTransaction.tx.outputsOfType<Donation>().single()
 
 
 
