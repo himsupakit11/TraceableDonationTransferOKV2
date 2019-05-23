@@ -13,6 +13,7 @@ import net.corda.finance.POUNDS
 import java.security.PublicKey
 import java.util.*
 import net.corda.finance.USD
+import java.time.Instant
 import java.util.logging.Logger
 import javax.persistence.Column
 import javax.persistence.Entity
@@ -91,6 +92,7 @@ data class Receipt(
         val donor: AbstractParty,
         val bank: Party,
         val recipientName: String,
+        val timestamp: Instant,
         override val participants: List<AbstractParty> = listOf(recipient,fundraiser,donor,bank),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
 ): LinearState,QueryableState{

@@ -46,7 +46,9 @@ object MakeReceipt {
             val createReceiptCommand = Command(ReceiptContract.Commands.Create(), listOf(campaignState.fundraiser.owningKey,campaignState.recipient.owningKey))
 
             //Output states
-            val makeReceiptState = Receipt(campaignReference,amount,campaignState.recipient,campaignState.fundraiser,serviceHub.identityService.requireWellKnownPartyFromAnonymous(donationState.donor),campaignState.bank,campaignState.recipientName)
+            val timeStamp = Instant.now()
+            logger.info("timeStamp: $timeStamp")
+            val makeReceiptState = Receipt(campaignReference,amount,campaignState.recipient,campaignState.fundraiser,serviceHub.identityService.requireWellKnownPartyFromAnonymous(donationState.donor),campaignState.bank,campaignState.recipientName,timeStamp)
             val receiptOutputAndContract = StateAndContract(makeReceiptState,ReceiptContract.ID)
 
 
