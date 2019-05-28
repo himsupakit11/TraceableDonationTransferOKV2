@@ -26,6 +26,7 @@ import net.corda.finance.contracts.getCashBalance
 import net.corda.finance.utils.sumCash
 import net.corda.core.contracts.Amount.Companion.sumOrZero
 import net.corda.core.utilities.loggerFor
+import net.corda.finance.flows.CashPaymentFlow
 import net.corda.nodeapi.internal.serialization.attachmentsClassLoaderEnabledPropertyName
 
 const val CASH_PROGRAM_ID: ContractClassName = "net.corda.finance.contracts.asset.Cash"
@@ -154,9 +155,15 @@ object EndCampaign{
             logger.info("CampaignStateRef: $stateRef")
 //            logger.info("temp: $x")
 //            if(x != 0)
+            val receiptStateAndRefs = serviceHub.vaultService.queryBy<Receipt>().states.filter { it.state.data.campaignReference == campaign.linearId }.map { it.state.data }
+            val token = receiptStateAndRefs.first().amount.token
+
+            val transferAmountToRecipient = receiptStateAndRefs.map { it.amount }.sumOrZero(token)
+            logger.info("transferAmountToRecipient: $transferAmountToRecipient")
+            subFlow(CashPaymentFlow(transferAmountToRecipient,campaign.recipient))
 //            subFlow(TransferFundToRecipient.Initiator(stateRef))
 //            else logger.info("Not initiate transfer fund to recipient flow ")
-//            logger.info("TransferFundToRecipient Successfully")
+            logger.info("TransferFundToRecipient Successfully")
             return ftx
     }
 

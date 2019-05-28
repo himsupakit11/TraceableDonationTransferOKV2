@@ -55,6 +55,7 @@ class ReceiptContract : Contract {
         "Making a receipt must consume the campaign state and the receipt state " using (tx.inputStates.size == 2)
         "There must be only the campaign output state when making a receipt " using (tx.outputStates.size == 1)
     }
+
     private fun verifyCreate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
         //Group donation by campaign id
         "There must be a campaign input state when making a receipt. " using (tx.inRefsOfType<Campaign>().size == 1)
@@ -63,13 +64,14 @@ class ReceiptContract : Contract {
         val campaignStates= tx.groupStates(Campaign::class.java, { it.linearId })
         "There must be a campaign state when making a receipt" using (campaignStates.isNotEmpty())
 
-
         val receiptStatesGroup: LedgerTransaction.InOutGroup<Receipt, UniqueIdentifier> = receiptState.single()
         val receipt: Receipt = receiptStatesGroup.outputs.single()
         val campaignStatesGroup = campaignStates.single()
 
         val campaign = campaignStatesGroup.outputs.single()
         val campaignInput = campaignStatesGroup.inputs.get(0)
+
+        "Recipient in receipt state must be the same as specified recipient in campaign state" using (receipt.recipientName == campaign.recipientName)
         val remainingAmount = campaignInput.remainingAmount
         logger.info("remainingAmount: $remainingAmount")
         logger.info("receipt amount: ${receipt.amount}")

@@ -65,6 +65,12 @@ class CampaignContract : Contract {
         val campaignStates= tx.groupStates(Campaign::class.java, { it.linearId })
         val campaignStatesGroup = campaignStates.single()
         val campaign = campaignStatesGroup.outputs.single()
+        val campaignInput = campaignStatesGroup.inputs.get(0)
+
+        "campaign name cannot be changed when making a donation".using(campaignInput.name == campaign.name)
+        "campaign category cannot be changed when making a donation".using(campaignInput.category == campaign.category)
+        "campaign description cannot be changed when making a donation".using(campaignInput.description == campaign.description)
+        "campaign objective cannot be changed when making a donation".using(campaignInput.objective == campaign.objective)
         val campaignTransferAmount = campaign.transferAmount
         logger.info("campaignTransferAmount: $campaignTransferAmount")
     }
@@ -79,7 +85,8 @@ class CampaignContract : Contract {
         "The campaign deadline must be in the future." using (campaign.deadline > Instant.now())
 
         "There must be a campaign name." using (campaign.name != "")
-        "The campaign must only be signed by fundraiser" using (signers-campaign.bank.owningKey == setOf(campaign.fundraiser.owningKey) )
+        logger.info("signers: $signers")
+        "The campaign must only be signed by fundraiser" using (signers.single() == campaign.fundraiser.owningKey )
         "There must be a campaign category" using (campaign.category != "")
         "There must be a recipient name" using (campaign.recipientName != "")
         "There must be a campaign category" using (campaign.category != "")
@@ -163,7 +170,7 @@ data class Campaign(
         val status: String,
         override val participants: List<AbstractParty> = listOf(fundraiser,recipient,donor,bank),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
-) : LinearState, QueryableState, SchedulableState {
+) : LinearState, QueryableState,SchedulableState {
     override fun supportedSchemas() = listOf(CampaignSchemaV1)
     override fun generateMappedObject(schema: MappedSchema) = CampaignSchemaV1.CampaignEntity(this)
     object CampaignSchemaV1 : MappedSchema(Campaign::class.java, 1, listOf(CampaignEntity::class.java)) {

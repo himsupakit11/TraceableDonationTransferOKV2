@@ -220,8 +220,8 @@ class EndCampaignTest{
         val newDonation= acceptDonationTransaction.tx.outputsOfType<Donation>().single()
 
         /**End campaign flow*/
-//        val endCampaignFlow = EndCampaign.Initiator(campaignStateAfterDonaion)
-//        val startEndCampaignFlow = Fundraiser.startFlow(endCampaignFlow).getOrThrow()
+        val endCampaignFlow = EndCampaign.Initiator(campaignStateAfterDonaion)
+        val startEndCampaignFlow = Fundraiser.startFlow(endCampaignFlow).getOrThrow()
         logger.info("###################### Bank #########################")
         logger.info(Bank.services.getCashBalance(USD).toString())
         logger.info("###################### Donor #########################")

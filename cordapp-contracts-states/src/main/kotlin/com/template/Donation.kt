@@ -42,17 +42,17 @@ class DonationContract: Contract {
 
     private fun verifyCreate(tx: LedgerTransaction, signers: Set<PublicKey>) = requireThat {
 
-        val donationState: List<LedgerTransaction.InOutGroup<Donation, UniqueIdentifier>> = tx.groupStates(Donation::class.java, { it.linearId })
-        "Only one donation can be made at a time" using (donationState.size == 1)
         val campaignStates: List<LedgerTransaction.InOutGroup<Campaign, UniqueIdentifier>> = tx.groupStates(Campaign::class.java, { it.linearId })
         "There must be a campaign state when making a donation" using (campaignStates.isNotEmpty())
 
+        val donationState: List<LedgerTransaction.InOutGroup<Donation, UniqueIdentifier>> = tx.groupStates(Donation::class.java, { it.linearId })
+        "Only one donation can be made at a time" using (donationState.size == 1)
         val donationStatesGroup: LedgerTransaction.InOutGroup<Donation, UniqueIdentifier> = donationState.single()
         "No input states should be consumed when making a donation" using (donationStatesGroup.outputs.size == 1)
         val donation: Donation = donationStatesGroup.outputs.single()
 
         "Donation amount cannot be zero amount" using (donation.amount > Amount(0, donation.amount.token))
-        "The campaign must be signed by donor, bank and fundraiser" using (signers == keysFromParticipants(donation)-donation.fundraiser.owningKey-donation.bank.owningKey)
+        "The campaign must be signed by donor and fundraiser" using (signers == keysFromParticipants(donation)-donation.fundraiser.owningKey-donation.bank.owningKey)
 
     }
 
@@ -78,6 +78,7 @@ data class Donation(
     val amount: Amount<Currency>,
     val timestamp: Instant,
     val paymentMethod: String,
+    /**add recipient into participants*/
     override val participants: List<AbstractParty> = listOf(donor,fundraiser,bank),
     override val linearId: UniqueIdentifier = UniqueIdentifier()
 ): LinearState,QueryableState{

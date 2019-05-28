@@ -67,6 +67,18 @@ class Controller {
         val states = vault.filterStatesOfType<Campaign>()
         return states.map { it.state.data }.toTypedArray()
     }
+    private fun getAllCampaign(): Array<Campaign> {
+        logger.info("getAvailableCampaign")
+        val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.ALL)
+        val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states
+        val states = vault.filterStatesOfType<Campaign>()
+        return states.map { it.state.data }.toTypedArray()
+    }
+    @CrossOrigin
+    // Get comsumed and unconsumed campaign state
+    @GetMapping("/campaigns/allCampaigns")
+    fun fetchAllCampaign(): Array<Campaign> = getAllCampaign()
+
 
     @CrossOrigin
     // Get available campaign
