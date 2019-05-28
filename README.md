@@ -38,7 +38,8 @@ http://localhost:8080/api/cash/cashState
 Spring boot Fundraiser: java -jar /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/clients/build/libs/clients-0.1.jar
 Spring boot Donor: java -jar -Dserver.port=8383 /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/clients/build/libs/clients-0.1.jar
 Spring boot Bank:  java -jar -Dserver.port=8181 /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/clients/build/libs/clients-0.1.jar
-Spring boot Recipient:  java -jar -Dserver.port=8282 /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/clients/build/libs/clients-0.1.jar
+Spring boot Recipient: java -jar -Dserver.port=8282 /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/clients/build/libs/clients-0.1.jar
+
 
 
 Fundraiser log: cd /Users/hmosx/Desktop/KMUTT/4\ th/Semester2/Project/temp/Receipt/cordapp-contracts-states/build/nodes/Fundraiser/logs

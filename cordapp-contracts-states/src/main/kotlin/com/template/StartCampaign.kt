@@ -23,6 +23,7 @@ object AutoOfferFlow {
             object RECEIVED : ProgressTracker.Step("Received API call")
             object DEALING : ProgressTracker.Step("Starting the deal flow") {
                 override fun childProgressTracker(): ProgressTracker = TwoPartyDealFlow.Primary.tracker()
+
             }
 
             fun tracker() = ProgressTracker(RECEIVED, DEALING)

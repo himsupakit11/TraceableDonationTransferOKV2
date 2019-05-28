@@ -36,8 +36,8 @@ class NodeRPCConnection{
  * Donor = 10015*/
 //    val cordaHost = "localhost:10006" //Fundraiser
 //    val cordaHost = "localhost:10009" //Bank
-//    val cordaHost = "localhost:10012" //Recipient
-    val cordaHost = "localhost:10015" //Donor
+    val cordaHost = "localhost:10012" //Recipient
+//    val cordaHost = "localhost:10015" //Donor
      val cordaUser = "user1"
      val cordaPassword = "test"
 

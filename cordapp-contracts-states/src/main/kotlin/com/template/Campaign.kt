@@ -170,7 +170,7 @@ data class Campaign(
         val status: String,
         override val participants: List<AbstractParty> = listOf(fundraiser,recipient,donor,bank),
         override val linearId: UniqueIdentifier = UniqueIdentifier()
-) : LinearState, QueryableState,SchedulableState {
+) : LinearState, QueryableState, SchedulableState {
     override fun supportedSchemas() = listOf(CampaignSchemaV1)
     override fun generateMappedObject(schema: MappedSchema) = CampaignSchemaV1.CampaignEntity(this)
     object CampaignSchemaV1 : MappedSchema(Campaign::class.java, 1, listOf(CampaignEntity::class.java)) {

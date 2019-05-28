@@ -144,7 +144,7 @@ class Controller {
         val generalCriteria = QueryCriteria.VaultQueryCriteria(Vault.StateStatus.UNCONSUMED)
         val vault = rpc.vaultQueryBy<Campaign>(generalCriteria).states.filter { it.state.data.status == "Out Of Date"
                 && it.state.data.raised < it.state.data.target}
-       logger.info("getFinishedAndFailedCampaign State: $vault")
+        logger.info("getFinishedAndFailedCampaign State: $vault")
         val states = vault.filterStatesOfType<Campaign>()
         return states.map { it.state.data }.distinct()
     }
@@ -267,7 +267,7 @@ class Controller {
     @CrossOrigin
     @GetMapping("/donations/donationsForCampaign/{ref:.+}")
     fun fetchDonationByCampaignId(@PathVariable ref: String?): ResponseEntity<Any?> {
-       logger.info("fetchDonationByCampaignId")
+        logger.info("fetchDonationByCampaignId")
         val donation = getDonationByCampaignRef(ref!!)
         logger.info("fetchDonationByCampaignId donation: $donation")
         logger.info("ref $ref")
@@ -322,8 +322,8 @@ class Controller {
     @CrossOrigin
     @PostMapping("/receipts")
     fun storeReceipt(@QueryParam(value = "id") id: String,
-                      @QueryParam(value = "amount") amount: String,
-                      @QueryParam(value = "currency") currency: String) : ResponseEntity<Any?> {
+                     @QueryParam(value = "amount") amount: String,
+                     @QueryParam(value = "currency") currency: String) : ResponseEntity<Any?> {
         return try {
             logger.info("id : $id")
             logger.info("amount : $amount")
